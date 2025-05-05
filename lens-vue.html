@@ -1,0 +1,1566 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lens Visualizer - Vue</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://unpkg.com/konva@9/konva.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-color: #f0f0f0;
+            font-family: Arial, sans-serif;
+        }
+        
+        #app {
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        #top-bar {
+            height: 50px;
+            background-color: #fff;
+            border-bottom: 1px solid #ddd;
+            display: flex;
+            align-items: center;
+            padding: 0 20px;
+            gap: 12px;
+        }
+
+        #top-bar button {
+            padding: 6px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            background-color: #fff;
+            color: #333;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        #main-content {
+            flex: 1;
+            display: flex;
+            overflow: hidden;
+        }
+        
+        #canvas-container {
+            flex: 1;
+        }
+        
+        #sidebar {
+            width: 300px;
+            background-color: #fff;
+            padding: 20px;
+            box-sizing: border-box;
+            border-left: 1px solid #ddd;
+            overflow-y: auto;
+        }
+
+        .control-section {
+            margin-bottom: 24px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .control-section:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+            padding-bottom: 0;
+        }
+        
+        .control-section h3 {
+            margin: 0 0 16px 0;
+            color: #333;
+            font-size: 16px;
+            font-weight: 600;
+        }
+        
+        .input-row {
+            display: flex;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+        
+        .input-row:last-child {
+            margin-bottom: 0;
+        }
+        
+        .input-row label {
+            flex: 1;
+            color: #666;
+            font-size: 14px;
+        }
+        
+        .input-row input {
+            width: 100px;
+            padding: 6px 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+            color: #333;
+        }
+        
+        .input-row input:focus {
+            outline: none;
+            border-color: #0066cc;
+            box-shadow: 0 0 0 2px rgba(0,102,204,0.1);
+        }
+
+        .surface-section {
+            background-color: #f8f9fa;
+            border-radius: 4px;
+            padding: 12px;
+            margin-bottom: 12px;
+        }
+
+        .surface-section:last-child {
+            margin-bottom: 0;
+        }
+
+        .surface-section h4 {
+            margin: 0 0 12px 0;
+            color: #444;
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .delete-section {
+            margin-top: 24px;
+            padding-top: 16px;
+            border-top: 1px solid #eee;
+        }
+
+        .delete-section button {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid #dc3545;
+            border-radius: 4px;
+            background-color: #fff;
+            color: #dc3545;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .delete-section button:hover {
+            background-color: #dc3545;
+            color: #fff;
+        }
+
+        select {
+            width: 100px;
+            padding: 6px 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+            color: #333;
+            background-color: #fff;
+        }
+        
+        select:focus {
+            outline: none;
+            border-color: #0066cc;
+            box-shadow: 0 0 0 2px rgba(0,102,204,0.1);
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <div id="top-bar">
+            <button @click="centerView">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"/>
+                    <circle cx="12" cy="12" r="3"/>
+                </svg>
+                Center View
+            </button>
+            <button @click="resetZoom">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.85.84 6.72 2.25"/>
+                    <path d="M21 3v9h-9"/>
+                </svg>
+                Reset Zoom
+            </button>
+            <button @click="addLens">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 5v14M5 12h14"/>
+                </svg>
+                Add Lens
+            </button>
+            <button @click="toggleRays">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 3v7M12 14v7M3 12h7M14 12h7"/>
+                </svg>
+                {{ showRays ? 'Hide Rays' : 'Show Rays' }}
+            </button>
+        </div>
+        <div id="main-content">
+            <div id="canvas-container" ref="canvasContainer"></div>
+            <div id="sidebar">
+                <div v-if="activeLens !== null">
+                    <div class="control-section">
+                        <h3>Lens Name</h3>
+                        <div class="input-row">
+                            <input type="text" v-model="activeLens.name" placeholder="Enter lens name">
+                        </div>
+                    </div>
+
+                    <div class="control-section">
+                        <h3>Size</h3>
+                        <div class="input-row">
+                            <label for="lens-thickness">Thickness (mm):</label>
+                            <input type="number" id="lens-thickness" v-model.number="activeLens.width" min="1" max="60" step="1" @input="updateSize">
+                        </div>
+                        <div class="input-row">
+                            <label for="lens-height">Height (mm):</label>
+                            <input type="number" id="lens-height" v-model.number="activeLens.height" min="4" max="100" step="1" @input="updateSize">
+                        </div>
+                    </div>
+
+                    <div class="control-section">
+                        <h3>Position</h3>
+                        <div class="input-row">
+                            <label for="lens-x">X Position (mm):</label>
+                            <input type="number" id="lens-x" v-model.number="activeLens.x" step="1" @input="updatePosition">
+                        </div>
+                        <div class="input-row">
+                            <label for="lens-y">Y Position (mm):</label>
+                            <input type="number" id="lens-y" v-model.number="activeLens.y" step="1" @input="updatePosition">
+                        </div>
+                    </div>
+
+                    <div class="control-section">
+                        <h3>Surface Details</h3>
+                        <div class="surface-section">
+                            <h4>Front Surface</h4>
+                            <div class="input-row">
+                                <label for="front-roc">Radius of Curvature:</label>
+                                <input type="number" id="front-roc" v-model.number="activeLens.frontRoc" min="-2000" max="2000" step="10" @input="updateSurface">
+                            </div>
+                        </div>
+                        <div class="surface-section">
+                            <h4>Back Surface</h4>
+                            <div class="input-row">
+                                <label for="back-roc">Radius of Curvature:</label>
+                                <input type="number" id="back-roc" v-model.number="activeLens.backRoc" min="-2000" max="2000" step="10" @input="updateSurface">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="control-section">
+                        <h3>Material</h3>
+                        <div class="input-row">
+                            <label for="lens-material">Type:</label>
+                            <select id="lens-material" v-model="activeLens.material" @change="updateMaterial">
+                                <option value="glass">Glass (n=1.5)</option>
+                                <option value="acrylic">Acrylic (n=1.49)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="delete-section">
+                        <button @click="deleteLens" class="danger">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                            </svg>
+                            Delete Lens
+                        </button>
+                    </div>
+                </div>
+                <div v-else>
+                    <div class="control-section">
+                        <h3>Ray Source Settings</h3>
+                        <div class="input-row">
+                            <label for="ray-x">X Position (mm):</label>
+                            <input type="number" id="ray-x" v-model.number="raySourceX" step="10" @input="updateRaySource">
+                        </div>
+                        <div class="input-row">
+                            <label for="ray-y">Y Position (mm):</label>
+                            <input type="number" id="ray-y" v-model.number="raySourceY" step="1" @input="updateRaySource">
+                        </div>
+                        <div class="input-row">
+                            <label for="ray-num">Number of Rays:</label>
+                            <input type="number" id="ray-num" v-model.number="raySourceNumRays" min="1" max="20" step="1" @input="updateRaySource">
+                        </div>
+                        <div class="input-row">
+                            <label for="ray-height">Ray Height (mm):</label>
+                            <input type="number" id="ray-height" v-model.number="raySourceHeight" min="10" max="100" step="5" @input="updateRaySource">
+                        </div>
+                    </div>
+                    <p style="text-align: center; color: #666; margin-top: 20px;">
+                        {{ isSourceSelected ? 'Source selected. Adjust parameters above.' : 'Select a lens or the source to edit properties.' }}
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { createApp, ref, onMounted, onUnmounted, computed, watch } = Vue;
+
+        // Coordinate converter utility
+        class CoordinateConverter {
+            constructor(gridSize) {
+                this.gridSize = gridSize;
+            }
+
+            // Convert from mm to pixels for drawing
+            mmToPixel(mm) {
+                // 10mm = 1cm = GRID_SIZE pixels
+                return mm * this.gridSize / 10;
+            }
+
+            // Convert from mm coordinates to pixel coordinates
+            mmCoordsToPixel(mmX, mmY) {
+                return {
+                    x: this.mmToPixel(mmX),
+                    y: -this.mmToPixel(mmY)  // Negate y for Konva's coordinate system
+                };
+            }
+
+            // Convert from pixel coordinates to mm coordinates
+            pixelCoordsToMm(pixelX, pixelY) {
+                return {
+                    x: pixelX * 10 / this.gridSize,
+                    y: -pixelY * 10 / this.gridSize  // Negate y to convert from Konva to global
+                };
+            }
+        }
+
+        // Format number to 2 decimal places
+        function format2Decimals(value) {
+            return Number(value).toFixed(2);
+        }
+
+        createApp({
+            setup() {
+                // Canvas setup
+                const canvasContainer = ref(null);
+                const stage = ref(null);
+                const gridLayer = ref(null);
+                const lensLayer = ref(null);
+
+                // Constants
+                const GRID_SIZE = 50;      // Pixels per grid unit (cm)
+                const GRID_RANGE = 1000;   // mm
+                const GRID_STEP = 10;      // mm
+                
+                // State
+                const scale = ref(1);
+                const position = ref({ x: 0, y: 0 });
+                const showRays = ref(true);
+                
+                // Create coordinate converter
+                const coordConverter = new CoordinateConverter(GRID_SIZE);
+
+                // Computed properties for grid
+                const numberInterval = computed(() => {
+                    if (scale.value < 0.5) return 100;
+                    if (scale.value < 0.25) return 200;
+                    if (scale.value < 0.125) return 500;
+                    return 50;
+                });
+
+                const tickInterval = computed(() => numberInterval.value / 5);
+
+                // Lens state
+                const lenses = ref([]);
+                const activeLens = ref(null);
+                const lensGroup = ref(null);
+                const activeLensIndex = ref(null);
+
+                // Default lens parameters (all values in mm)
+                const defaultLensParams = {
+                    name: 'Lens 1',
+                    x: 0,             // mm
+                    y: 0,             // mm
+                    width: 20,        // Thickness in mm
+                    height: 50,       // Height in mm
+                    frontRoc: 60,    // Front radius of curvature in mm
+                    backRoc: 0,        // Back radius of curvature in mm
+                    material: 'glass'  // Default material
+                };
+
+                // Materials refractive indices
+                const materials = {
+                    glass: 1.5,
+                    acrylic: 1.49
+                };
+
+                // Ray related functionality
+                const rayGroup = ref(null);
+                const rays = ref([]);
+                const sourceGroup = ref(null);
+                
+                // Ray source position (fixed for now)
+                const raySource = {
+                    x: -40,  // mm
+                    y: 0,     // mm
+                    numRays: 5,
+                    height: 40, // mm
+                    width: 5    // mm - source block width
+                };
+                
+                // Source selection state
+                const isSourceSelected = ref(false);
+                
+                // Ray source UI bindings
+                const raySourceX = ref(raySource.x);
+                const raySourceY = ref(raySource.y);
+                const raySourceNumRays = ref(raySource.numRays);
+                const raySourceHeight = ref(raySource.height);
+                
+                // Ray class to store ray path data
+                class Ray {
+                    constructor(x, y, dx, dy) {
+                        this.x = x;
+                        this.y = y;
+                        this.dx = dx;
+                        this.dy = dy;
+                        this.path = [[x, y]];  // Initialize path with starting point
+                        this.directions = [{dx, dy}];
+                    }
+
+                    addPoint(x, y, dx, dy, metadata = {}) {
+                        this.path.push([x, y]);
+                        this.directions.push({dx, dy});
+                        this.x = x;
+                        this.y = y;
+                        this.dx = dx;
+                        this.dy = dy;
+                    }
+                }
+                
+                // Create lens group
+                function createLensGroup() {
+                    if (!lensLayer.value) return;
+                    
+                    lensGroup.value = new Konva.Group({
+                        name: 'lens-group'
+                    });
+                    lensLayer.value.add(lensGroup.value);
+                }
+                
+                // Create ray group
+                function createRayGroup() {
+                    if (!lensLayer.value) return;
+                    
+                    rayGroup.value = new Konva.Group({
+                        name: 'ray-group'
+                    });
+                    lensLayer.value.add(rayGroup.value);
+                }
+                
+                // Create source group
+                function createSourceGroup() {
+                    if (!lensLayer.value) return;
+                    
+                    sourceGroup.value = new Konva.Group({
+                        name: 'source-group',
+                        draggable: true,
+                        dragBoundFunc: function(pos) {
+                            // Only allow horizontal movement
+                            return {
+                                x: pos.x,
+                                y: this.absolutePosition().y
+                            };
+                        }
+                    });
+                    
+                    // Add click handler for selecting the source
+                    sourceGroup.value.on('click', () => {
+                        selectSource();
+                    });
+                    
+                    // Add drag handlers
+                    sourceGroup.value.on('dragmove', (e) => {
+                        const pos = sourceGroup.value.position();
+                        const mmPos = coordConverter.pixelCoordsToMm(pos.x, pos.y);
+                        // Only update X position from dragging
+                        updateSourceAfterDrag({x: mmPos.x, y: raySource.y});
+                    });
+                    
+                    lensLayer.value.add(sourceGroup.value);
+                    drawSource();
+                }
+                
+                // Trace rays through the optical system
+                function traceRays() {
+                    if (!rayGroup.value) return;
+                    
+                    // If rays are hidden, don't bother tracing
+                    if (!showRays.value) return;
+                    
+                    // Clear existing rays
+                    rayGroup.value.destroyChildren();
+                    rays.value = [];
+                    
+                    // If no lenses, don't trace
+                    if (lenses.value.length === 0) return;
+                    
+                    // Sort lenses by x position (left to right)
+                    const sortedLenses = [...lenses.value].sort((a, b) => a.x - b.x);
+                    
+                    // Generate ray starting positions
+                    const rayPositions = generateRayPositions();
+                    
+                    // Trace each ray
+                    rayPositions.forEach((pos, i) => {
+                        const ray = traceRay(pos.x, pos.y, 1, 0, sortedLenses);
+                        if (ray) {
+                            rays.value.push(ray);
+                            drawRay(ray, i);
+                        }
+                    });
+                }
+                
+                // Generate ray starting positions
+                function generateRayPositions() {
+                    const positions = [];
+                    const halfHeight = raySource.height / 2;
+                    const step = raySource.height / (raySource.numRays - 1);
+                    
+                    for (let i = 0; i < raySource.numRays; i++) {
+                        positions.push({
+                            x: raySource.x,
+                            y: raySource.y - halfHeight + i * step
+                        });
+                    }
+                    
+                    return positions;
+                }
+                
+                // Trace a single ray through all lenses
+                function traceRay(startX, startY, dirX, dirY, lenses) {
+                    // Create a ray
+                    let ray = new Ray(startX, startY, dirX, dirY);
+                    let rayX = ray.x, rayY = ray.y, rayDX = ray.dx, rayDY = ray.dy;
+                    let n1 = 1.0; // Air
+                    let alive = true;
+                    
+                    for (let lens of lenses) {
+                        // Get material refractive index
+                        let n2 = materials[lens.material] || 1.5; // Default to glass if not found
+                        
+                        // Prepare lens geometry
+                        const pixelHeight = coordConverter.mmToPixel(lens.height);
+                        const halfHeight = pixelHeight / 2;
+                        const leftX = lens.x;
+                        const rightX = lens.x + lens.width;
+                        const lensPosY = lens.y;
+                        
+                        // Sample front surface
+                        const frontPoints = sampleSurface(true, lens, leftX, rightX, lensPosY, lens.height / 2, 100);
+                        
+                        // Check ray intersection with front surface
+                        let frontHit = polylineRayIntersection(rayX, rayY, rayDX, rayDY, frontPoints);
+                        let ix = leftX, iy = rayY, hitSeg = null;
+                        
+                        if (frontHit) {
+                            ix = frontHit.hit.ix;
+                            iy = frontHit.hit.iy;
+                            hitSeg = frontHit.hitSeg;
+                        } else {
+                            // Ray misses this lens, just continue to next lens
+                            continue;
+                        }
+                        
+                        // Add intersection point to ray
+                        ray.addPoint(ix, iy, rayDX, rayDY);
+                        
+                        // Calculate surface normal at intersection
+                        let n = calculateSurfaceNormal(ix, iy, lens, leftX, rightX, lensPosY, hitSeg, true);
+                        
+                        // Apply Snell's law
+                        let dInNorm = Math.sqrt(rayDX * rayDX + rayDY * rayDY);
+                        let dIn = { x: rayDX / dInNorm, y: rayDY / dInNorm };
+                        let dOut = snellRefract(dIn, n, n1, n2);
+                        
+                        if (!dOut) {
+                            // Total internal reflection
+                            alive = false;
+                            break;
+                        }
+                        
+                        // Sample back surface
+                        let backPoints = sampleSurface(false, lens, leftX, rightX, lensPosY, lens.height / 2, 100);
+                        let backHit = polylineRayIntersection(ix, iy, dOut.x, dOut.y, backPoints);
+                        let bx = ix + dOut.x * 100, by = iy + dOut.y * 100, hitSeg2 = null;
+                        
+                        if (backHit) {
+                            bx = backHit.hit.ix;
+                            by = backHit.hit.iy;
+                            hitSeg2 = backHit.hitSeg;
+                        } else {
+                            // Ray misses back surface
+                            alive = false;
+                            break;
+                        }
+                        
+                        // Add back surface intersection to ray
+                        ray.addPoint(bx, by, dOut.x, dOut.y);
+                        
+                        // Calculate back surface normal
+                        let n2b = calculateSurfaceNormal(bx, by, lens, leftX, rightX, lensPosY, hitSeg2, false);
+                        
+                        // Apply Snell's law again
+                        let dIn2Norm = Math.sqrt(dOut.x * dOut.x + dOut.y * dOut.y);
+                        let dIn2 = { x: dOut.x / dIn2Norm, y: dOut.y / dIn2Norm };
+                        let dOut2 = snellRefract(dIn2, n2b, n2, n1);
+                        
+                        if (!dOut2) {
+                            // Total internal reflection
+                            alive = false;
+                            break;
+                        }
+                        
+                        // Prepare for next lens
+                        rayX = bx;
+                        rayY = by;
+                        rayDX = dOut2.x;
+                        rayDY = dOut2.y;
+                    }
+                    
+                    // After all lenses, extend the ray
+                    if (alive) {
+                        let len2 = 500; // Extend ray 500mm past the last lens
+                        let endX = rayX + rayDX * len2;
+                        let endY = rayY + rayDY * len2;
+                        ray.addPoint(endX, endY, rayDX, rayDY);
+                    }
+                    
+                    return ray;
+                }
+                
+                // Sample points on lens surface
+                function sampleSurface(isFront, lens, leftX, rightX, lensPosY, halfHeight, Npts) {
+                    let points = [];
+                    
+                    if (isFront) {
+                        // Front surface from top to bottom
+                        for (let j = 0; j <= Npts; j++) {
+                            let y = lensPosY - halfHeight + (2 * halfHeight) * j / Npts;
+                            
+                            if (Math.abs(lens.frontRoc) >= 10) {
+                                // Curved surface
+                                const frontCenterX = leftX + lens.frontRoc;
+                                const frontCenterY = lensPosY;
+                                const frontRadius = Math.abs(lens.frontRoc);
+                                
+                                // Calculate surface x coordinate using circle equation
+                                let arg = frontRadius * frontRadius - (y - frontCenterY) * (y - frontCenterY);
+                                if (arg >= 0) {
+                                    let x = frontCenterX - Math.sign(lens.frontRoc) * Math.sqrt(arg);
+                                    points.push([x, y]);
+                                }
+                            } else {
+                                // Flat surface
+                                points.push([leftX, y]);
+                            }
+                        }
+                    } else {
+                        // Back surface from bottom to top (for correct path closure)
+                        for (let j = Npts; j >= 0; j--) {
+                            let y = lensPosY - halfHeight + (2 * halfHeight) * j / Npts;
+                            
+                            if (Math.abs(lens.backRoc) >= 10) {
+                                // Curved surface
+                                const backCenterX = rightX + lens.backRoc;
+                                const backCenterY = lensPosY;
+                                const backRadius = Math.abs(lens.backRoc);
+                                
+                                // Calculate surface x coordinate using circle equation
+                                let arg = backRadius * backRadius - (y - backCenterY) * (y - backCenterY);
+                                if (arg >= 0) {
+                                    let x = backCenterX - Math.sign(lens.backRoc) * Math.sqrt(arg);
+                                    points.push([x, y]);
+                                }
+                            } else {
+                                // Flat surface
+                                points.push([rightX, y]);
+                            }
+                        }
+                    }
+                    
+                    return points;
+                }
+                
+                // Calculate surface normal at a point
+                function calculateSurfaceNormal(x, y, lens, leftX, rightX, lensPosY, hitSeg, isFront) {
+                    if (hitSeg) {
+                        // Use the hit segment normal if available
+                        return segmentNormal(hitSeg.x1, hitSeg.y1, hitSeg.x2, hitSeg.y2);
+                    } else if (isFront) {
+                        if (Math.abs(lens.frontRoc) < 10) {
+                            // Flat front surface
+                            return { x: 1, y: 0 };
+                        } else {
+                            // Curved front surface
+                            const frontCenterX = leftX + lens.frontRoc;
+                            const frontCenterY = lensPosY;
+                            const frontRadius = Math.abs(lens.frontRoc);
+                            
+                            let n = {
+                                x: (x - frontCenterX) / frontRadius,
+                                y: (y - frontCenterY) / frontRadius
+                            };
+                            
+                            if (Math.sign(lens.frontRoc) < 0) {
+                                n.x = -n.x;
+                                n.y = -n.y;
+                            }
+                            
+                            return n;
+                        }
+                    } else {
+                        if (Math.abs(lens.backRoc) < 10) {
+                            // Flat back surface
+                            return { x: -1, y: 0 };
+                        } else {
+                            // Curved back surface
+                            let n = {
+                                x: (x - (rightX + lens.backRoc)) / Math.abs(lens.backRoc),
+                                y: (y - lensPosY) / Math.abs(lens.backRoc)
+                            };
+                            
+                            if (Math.sign(lens.backRoc) > 0) {
+                                n.x = -n.x;
+                                n.y = -n.y;
+                            }
+                            
+                            return n;
+                        }
+                    }
+                }
+                
+                // Calculate normal vector of a line segment
+                function segmentNormal(x1, y1, x2, y2) {
+                    let nx = -(y2 - y1);
+                    let ny = x2 - x1;
+                    const nLen = Math.sqrt(nx * nx + ny * ny);
+                    return { x: nx / nLen, y: ny / nLen };
+                }
+                
+                // Find intersection of ray with polyline
+                function polylineRayIntersection(rayX, rayY, rayDX, rayDY, polyline) {
+                    let minT = Infinity, hit = null, hitSeg = null;
+                    
+                    for (let j = 0; j < polyline.length - 1; j++) {
+                        const [x1, y1] = polyline[j];
+                        const [x2, y2] = polyline[j + 1];
+                        
+                        // Calculate intersection of ray with line segment
+                        const denom = (rayDX * (y1 - y2) + rayDY * (x2 - x1));
+                        
+                        if (Math.abs(denom) < 1e-8) continue;
+                        
+                        const s = (rayDX * (y1 - rayY) + rayDY * (rayX - x1)) / denom;
+                        const t = (x1 + s * (x2 - x1) - rayX) / rayDX;
+                        
+                        if (s >= 0 && s <= 1 && t > 1e-6 && t < minT) {
+                            minT = t;
+                            hit = { ix: rayX + t * rayDX, iy: rayY + t * rayDY };
+                            hitSeg = { x1, y1, x2, y2 };
+                        }
+                    }
+                    
+                    return hit ? { hit, hitSeg } : null;
+                }
+                
+                // Apply Snell's law
+                function snellRefract(dIn, n, n1, n2) {
+                    // 2D tangent vector (perpendicular to normal)
+                    let t = { x: -n.y, y: n.x };
+                    
+                    // Decompose incoming direction into normal and tangential components
+                    let d_n = dIn.x * n.x + dIn.y * n.y;
+                    let d_t = dIn.x * t.x + dIn.y * t.y;
+                    
+                    // Scale tangential component by ratio of refractive indices
+                    let eta = n1 / n2;
+                    let d_t_out = eta * d_t;
+                    
+                    // Check for total internal reflection
+                    if (d_t_out * d_t_out > 1) return null;
+                    
+                    // Calculate normal component of output direction
+                    let d_n_out = Math.sign(d_n) * Math.sqrt(1 - d_t_out * d_t_out);
+                    
+                    // Recompose into output direction vector
+                    return {
+                        x: d_t_out * t.x + d_n_out * n.x,
+                        y: d_t_out * t.y + d_n_out * n.y
+                    };
+                }
+                
+                // Draw ray
+                function drawRay(ray, index) {
+                    if (!rayGroup.value) return;
+                    
+                    // Convert all points to pixel coordinates
+                    const pixelPoints = [];
+                    
+                    for (let point of ray.path) {
+                        const [x, y] = point;
+                        const pixelPos = coordConverter.mmCoordsToPixel(x, y);
+                        pixelPoints.push(pixelPos.x, pixelPos.y);
+                    }
+                    
+                    // Create ray line
+                    const line = new Konva.Line({
+                        points: pixelPoints,
+                        stroke: '#f00',
+                        strokeWidth: 2,
+                        name: `ray-${index}`,
+                        lineCap: 'round',
+                        lineJoin: 'round',
+                        opacity: 0.7
+                    });
+                    
+                    rayGroup.value.add(line);
+                    lensLayer.value.batchDraw();
+                }
+                
+                // Draw the source block
+                function drawSource() {
+                    if (!sourceGroup.value) return;
+                    
+                    // Clear existing source elements
+                    sourceGroup.value.destroyChildren();
+                    
+                    // Convert mm to pixels for drawing
+                    const pixelHeight = coordConverter.mmToPixel(raySource.height);
+                    const pixelWidth = coordConverter.mmToPixel(raySource.width);
+                    
+                    // Create source block
+                    const sourceBlock = new Konva.Rect({
+                        width: pixelWidth,
+                        height: pixelHeight,
+                        fill: isSourceSelected.value ? '#ff6b6b' : '#0066cc',
+                        stroke: isSourceSelected.value ? '#ff0000' : '#0066cc',
+                        strokeWidth: isSourceSelected.value ? 2 / scale.value : 1 / scale.value, // Scale stroke width with zoom
+                        cornerRadius: 4 / scale.value, // Scale corner radius with zoom
+                        x: -pixelWidth / 2,
+                        y: -pixelHeight / 2
+                    });
+                    
+                    sourceGroup.value.add(sourceBlock);
+                    
+                    // Add a label - scale with zoom
+                    const label = new Konva.Text({
+                        text: 'Source',
+                        fontSize: 14 / scale.value, // Scale font size inversely with zoom
+                        fill: '#333',
+                        align: 'center',
+                        width: pixelWidth * 2,
+                        x: -pixelWidth,
+                        y: pixelHeight / 2 + 5 / scale.value // Scale position with zoom
+                    });
+                    
+                    sourceGroup.value.add(label);
+                    
+                    // Set position based on mm coordinates
+                    const pixelPos = coordConverter.mmCoordsToPixel(raySource.x, raySource.y);
+                    sourceGroup.value.position(pixelPos);
+                    
+                    lensLayer.value.batchDraw();
+                }
+                
+                // Select the source
+                function selectSource() {
+                    // Deselect any active lens
+                    activeLens.value = null;
+                    activeLensIndex.value = null;
+                    
+                    // Dim all lenses
+                    if (lensGroup.value) {
+                        lensGroup.value.children.forEach(group => {
+                            group.opacity(0.6);
+                        });
+                    }
+                    
+                    // Set source as selected
+                    isSourceSelected.value = true;
+                    drawSource();
+                    
+                    // Update UI bindings to match source parameters with formatting
+                    raySourceX.value = format2Decimals(raySource.x);
+                    raySourceY.value = format2Decimals(raySource.y);
+                    raySourceNumRays.value = raySource.numRays;
+                    raySourceHeight.value = format2Decimals(raySource.height);
+                }
+                
+                // Update source after dragging
+                function updateSourceAfterDrag(mmPos) {
+                    // Update source position
+                    raySource.x = mmPos.x;
+                    raySource.y = mmPos.y;
+                    
+                    // Update UI bindings with formatted values
+                    raySourceX.value = format2Decimals(mmPos.x);
+                    raySourceY.value = format2Decimals(mmPos.y);
+                    
+                    // Update rays
+                    traceRays();
+                }
+                
+                // Update ray source parameters
+                function updateRaySource() {
+                    // Parse values to ensure they're numeric
+                    raySource.x = parseFloat(raySourceX.value);
+                    raySource.y = parseFloat(raySourceY.value);
+                    raySource.numRays = parseInt(raySourceNumRays.value);
+                    raySource.height = parseFloat(raySourceHeight.value);
+                    
+                    // Update formatted display values
+                    raySourceX.value = format2Decimals(raySource.x);
+                    raySourceY.value = format2Decimals(raySource.y);
+                    raySourceHeight.value = format2Decimals(raySource.height);
+                    
+                    // Update source visualization
+                    drawSource();
+                    
+                    // Re-trace rays with new source configuration
+                    traceRays();
+                }
+
+                // Update ray visualization when lenses change
+                watch(lenses, () => {
+                    traceRays();
+                }, { deep: true });
+
+                // Create lens path
+                function createLensPath(lens) {
+                    // Convert mm to pixels for drawing
+                    const pixelWidth = coordConverter.mmToPixel(lens.width);
+                    const pixelHeight = coordConverter.mmToPixel(lens.height);
+                    const halfHeight = pixelHeight / 2;
+                    const localLeftX = 0;
+                    const localRightX = pixelWidth;
+                    const localLensPosY = 0;
+                    const frontFlat = Math.abs(lens.frontRoc) < 10;
+                    const backFlat = Math.abs(lens.backRoc) < 10;
+                    
+                    const Npts = 100;
+                    let frontPoints = [];
+                    let backPoints = [];
+
+                    // Sample front surface
+                    for (let j = 0; j <= Npts; j++) {
+                        let y = localLensPosY - halfHeight + (2 * halfHeight) * j / Npts;
+                        if (!frontFlat) {
+                            const frontCenterX = localLeftX + coordConverter.mmToPixel(lens.frontRoc);
+                            const frontCenterY = localLensPosY;
+                            const frontRadius = coordConverter.mmToPixel(Math.abs(lens.frontRoc));
+                            let arg = frontRadius * frontRadius - (y - frontCenterY) * (y - frontCenterY);
+                            if (arg >= 0) {
+                                let x = frontCenterX - Math.sign(lens.frontRoc) * Math.sqrt(arg);
+                                frontPoints.push([x, y]);
+                            }
+                        } else {
+                            frontPoints.push([localLeftX, y]);
+                        }
+                    }
+
+                    // Sample back surface
+                    for (let j = Npts; j >= 0; j--) {
+                        let y = localLensPosY - halfHeight + (2 * halfHeight) * j / Npts;
+                        if (!backFlat) {
+                            const backCenterX = localRightX + coordConverter.mmToPixel(lens.backRoc);
+                            const backCenterY = localLensPosY;
+                            const backRadius = coordConverter.mmToPixel(Math.abs(lens.backRoc));
+                            let arg = backRadius * backRadius - (y - backCenterY) * (y - backCenterY);
+                            if (arg >= 0) {
+                                let x = backCenterX - Math.sign(lens.backRoc) * Math.sqrt(arg);
+                                backPoints.push([x, y]);
+                            }
+                        } else {
+                            backPoints.push([localRightX, y]);
+                        }
+                    }
+
+                    let allPoints = frontPoints.concat(backPoints);
+                    let pathData = '';
+                    if (allPoints.length > 0) {
+                        pathData = `M ${allPoints[0][0]} ${allPoints[0][1]} `;
+                        for (let k = 1; k < allPoints.length; k++) {
+                            pathData += `L ${allPoints[k][0]} ${allPoints[k][1]} `;
+                        }
+                        pathData += 'Z';
+                    }
+                    
+                    // Use consistent lens color regardless of material
+                    return new Konva.Path({
+                        data: pathData,
+                        fill: 'rgba(0, 102, 204, 0.2)',
+                        stroke: '#0066cc',
+                        strokeWidth: 2
+                    });
+                }
+
+                // Draw grid
+                function drawGrid() {
+                    if (!gridLayer.value) return;
+                    
+                    // Clear existing grid
+                    gridLayer.value.destroyChildren();
+                    
+                    // Cache grid elements that don't change
+                    const gridElements = {
+                        axes: null,
+                        origin: null,
+                        labels: new Map()
+                    };
+                    
+                    // Draw vertical grid lines
+                    for (let x = -GRID_RANGE; x <= GRID_RANGE; x += GRID_STEP) {
+                        const pixelPos = coordConverter.mmCoordsToPixel(x, 0);
+                        const line = new Konva.Line({
+                            points: [pixelPos.x, -10000, pixelPos.x, 10000],
+                            stroke: '#e0e0e0',
+                            strokeWidth: 1 / scale.value  // Scale line width inversely with zoom
+                        });
+                        gridLayer.value.add(line);
+                    }
+                    
+                    // Draw horizontal grid lines
+                    for (let y = -GRID_RANGE; y <= GRID_RANGE; y += GRID_STEP) {
+                        const pixelPos = coordConverter.mmCoordsToPixel(0, y);
+                        const line = new Konva.Line({
+                            points: [-10000, pixelPos.y, 10000, pixelPos.y],
+                            stroke: '#e0e0e0',
+                            strokeWidth: 1 / scale.value  // Scale line width inversely with zoom
+                        });
+                        gridLayer.value.add(line);
+                    }
+                    
+                    // Draw axes
+                    const origin = coordConverter.mmCoordsToPixel(0, 0);
+                    
+                    const xAxis = new Konva.Line({
+                        points: [-10000, origin.y, 10000, origin.y],
+                        stroke: '#666',
+                        strokeWidth: 2 / scale.value  // Scale line width inversely with zoom
+                    });
+                    
+                    const yAxis = new Konva.Line({
+                        points: [origin.x, -10000, origin.x, 10000],
+                        stroke: '#666',
+                        strokeWidth: 2 / scale.value  // Scale line width inversely with zoom
+                    });
+                    
+                    gridLayer.value.add(xAxis);
+                    gridLayer.value.add(yAxis);
+                    
+                    // Origin point
+                    const originPoint = new Konva.Circle({
+                        x: origin.x,
+                        y: origin.y,
+                        radius: 3 / scale.value,  // Scale radius inversely with zoom
+                        fill: '#999',
+                        opacity: 0.5
+                    });
+                    
+                    gridLayer.value.add(originPoint);
+                    
+                    // Draw x-axis labels and ticks
+                    for (let x = -GRID_RANGE; x <= GRID_RANGE; x += tickInterval.value) {
+                        if (x === 0) continue; // Skip zero
+                        
+                        const pixelPos = coordConverter.mmCoordsToPixel(x, 0);
+                        
+                        if (x % numberInterval.value === 0) {
+                            // Main ticks with labels
+                            const tick = new Konva.Line({
+                                points: [pixelPos.x, origin.y - 5 / scale.value, pixelPos.x, origin.y + 5 / scale.value],
+                                stroke: '#666',
+                                strokeWidth: 1.5 / scale.value
+                            });
+                            
+                            const label = new Konva.Text({
+                                text: x.toString(),
+                                fontSize: 20 / scale.value,
+                                fill: '#666',
+                                x: pixelPos.x - 15,
+                                y: origin.y + 10
+                            });
+                            
+                            gridLayer.value.add(tick);
+                            gridLayer.value.add(label);
+                        } else {
+                            // Smaller ticks
+                            const tick = new Konva.Line({
+                                points: [pixelPos.x, origin.y - 2 / scale.value, pixelPos.x, origin.y + 2 / scale.value],
+                                stroke: '#aaa',
+                                strokeWidth: 1 / scale.value
+                            });
+                            
+                            gridLayer.value.add(tick);
+                        }
+                    }
+                    
+                    // Add smaller tick marks
+                    for (let x = -GRID_RANGE; x <= GRID_RANGE; x += GRID_STEP) {
+                        if (x % tickInterval.value !== 0) {
+                            const pixelPos = coordConverter.mmCoordsToPixel(x, 0);
+                            const tick = new Konva.Line({
+                                points: [pixelPos.x, origin.y - 2 / scale.value, pixelPos.x, origin.y + 2 / scale.value],
+                                stroke: '#aaa',
+                                strokeWidth: 1 / scale.value
+                            });
+                            gridLayer.value.add(tick);
+                        }
+                    }
+                    
+                    gridLayer.value.batchDraw();
+                }
+
+                // Draw lens
+                function drawLens(lens, index) {
+                    if (!lensGroup.value) return;
+
+                    let group = lensGroup.value.findOne(`#lens-${index}`);
+                    
+                    if (!group) {
+                        group = new Konva.Group({
+                            draggable: true,
+                            dragBoundFunc: function(pos) {
+                                return {
+                                    x: pos.x,
+                                    y: this.absolutePosition().y
+                                };
+                            },
+                            id: `lens-${index}`
+                        });
+
+                        group.on('click', () => {
+                            selectLens(index);
+                        });
+
+                        group.on('dragmove', (e) => {
+                            const pos = group.position();
+                            const mmPos = coordConverter.pixelCoordsToMm(pos.x, pos.y);
+                            // Update lens position using mm
+                            updateLensAfterDrag(index, mmPos);
+                        });
+
+                        lensGroup.value.add(group);
+                    }
+
+                    const pixelPos = coordConverter.mmCoordsToPixel(lens.x, lens.y);
+                    group.position(pixelPos);
+                    group.destroyChildren();
+
+                    const path = createLensPath(lens);
+                    group.add(path);
+                    
+                    // Add a label with the lens name - scale with zoom
+                    const pixelHeight = coordConverter.mmToPixel(lens.height);
+                    const label = new Konva.Text({
+                        text: lens.name,
+                        fontSize: 14 / scale.value, // Scale font size inversely with zoom
+                        fill: '#333',
+                        align: 'center',
+                        width: coordConverter.mmToPixel(lens.width) * 2,
+                        x: -coordConverter.mmToPixel(lens.width) / 2,
+                        y: pixelHeight / 2 + 5 / scale.value // Scale position with zoom
+                    });
+                    
+                    group.add(label);
+
+                    return group;
+                }
+
+                // Add lens
+                function addLens() {
+                    const newLens = {
+                        ...defaultLensParams,
+                        name: `Lens ${lenses.value.length + 1}`,
+                        x: lenses.value.length > 0 ? 
+                            lenses.value[lenses.value.length - 1].x + 
+                            lenses.value[lenses.value.length - 1].width + 10 : 
+                            defaultLensParams.x
+                    };
+                    
+                    lenses.value.push(newLens);
+                    selectLens(lenses.value.length - 1);
+                    drawLens(newLens, lenses.value.length - 1);
+                }
+
+                // Select lens
+                function selectLens(index) {
+                    // Deselect source if it was selected
+                    if (isSourceSelected.value) {
+                        isSourceSelected.value = false;
+                        drawSource();
+                    }
+                    
+                    const lens = lenses.value[index];
+                    // Create a new object for activeLens to avoid reference issues
+                    activeLens.value = {
+                        name: lens.name,
+                        width: format2Decimals(lens.width),
+                        height: format2Decimals(lens.height),
+                        x: format2Decimals(lens.x),
+                        y: format2Decimals(lens.y),
+                        frontRoc: format2Decimals(lens.frontRoc),
+                        backRoc: format2Decimals(lens.backRoc),
+                        material: lens.material
+                    };
+                    
+                    // Store the index for reference
+                    activeLensIndex.value = index;
+                    
+                    highlightSelectedLens(index);
+                }
+
+                // Update lens after drag
+                function updateLensAfterDrag(index, mmPos) {
+                    // Update the lens position
+                    lenses.value[index].x = mmPos.x;
+                    lenses.value[index].y = mmPos.y;
+                    
+                    // Update the active lens values if this is the active lens
+                    if (activeLensIndex.value === index) {
+                        activeLens.value.x = format2Decimals(mmPos.x);
+                        activeLens.value.y = format2Decimals(mmPos.y);
+                    }
+                    
+                    // Update ray tracing
+                    traceRays();
+                }
+
+                // Highlight selected lens
+                function highlightSelectedLens(index) {
+                    if (!lensGroup.value) return;
+                    
+                    lensGroup.value.children.forEach(group => {
+                        if (group.id() === `lens-${index}`) {
+                            group.opacity(1);
+                        } else {
+                            group.opacity(0.6);
+                        }
+                    });
+                    lensLayer.value.batchDraw();
+                }
+
+                // Delete lens
+                function deleteLens() {
+                    if (activeLens.value === null || activeLensIndex.value === null) return;
+                    
+                    const index = activeLensIndex.value;
+                    
+                    // Remove the lens visual element
+                    const group = lensGroup.value.findOne(`#lens-${index}`);
+                    if (group) {
+                        group.destroy();
+                    }
+                    
+                    // Remove the lens from the array
+                    lenses.value.splice(index, 1);
+                    
+                    // Update visual elements to reflect new indices
+                    lensGroup.value.children.forEach((child, i) => {
+                        if (child.id().startsWith('lens-')) {
+                            const oldIndex = parseInt(child.id().split('-')[1]);
+                            if (oldIndex > index) {
+                                child.id(`lens-${oldIndex - 1}`);
+                            }
+                        }
+                    });
+                    
+                    // Update active lens
+                    if (lenses.value.length > 0) {
+                        // Select the next lens, or the previous if we deleted the last one
+                        const newIndex = Math.min(index, lenses.value.length - 1);
+                        activeLensIndex.value = newIndex;
+                        selectLens(newIndex);
+                    } else {
+                        // No more lenses
+                        activeLens.value = null;
+                        activeLensIndex.value = null;
+                    }
+                    
+                    // Redraw
+                    lensLayer.value.batchDraw();
+                    
+                    // Update ray tracing
+                    traceRays();
+                }
+
+                // Update position manually
+                function updatePosition() {
+                    if (activeLens.value && activeLensIndex.value !== null) {
+                        const index = activeLensIndex.value;
+                        console.log('Updating position:', activeLens.value.x, activeLens.value.y);
+                        
+                        // Parse values to ensure they're numeric
+                        lenses.value[index].x = parseFloat(activeLens.value.x);
+                        lenses.value[index].y = parseFloat(activeLens.value.y);
+                        
+                        // Redraw lens
+                        drawLens(lenses.value[index], index);
+                        
+                        // Update formatted display value
+                        activeLens.value.x = format2Decimals(lenses.value[index].x);
+                        activeLens.value.y = format2Decimals(lenses.value[index].y);
+                        
+                        // Update ray tracing
+                        traceRays();
+                    }
+                }
+
+                // Update size
+                function updateSize() {
+                    if (activeLens.value && activeLensIndex.value !== null) {
+                        const index = activeLensIndex.value;
+                        console.log('Updating size:', activeLens.value.width, activeLens.value.height);
+                        
+                        // Parse values to ensure they're numeric
+                        lenses.value[index].width = parseFloat(activeLens.value.width);
+                        lenses.value[index].height = parseFloat(activeLens.value.height);
+                        
+                        // Redraw lens
+                        drawLens(lenses.value[index], index);
+                        
+                        // Update formatted display value
+                        activeLens.value.width = format2Decimals(lenses.value[index].width);
+                        activeLens.value.height = format2Decimals(lenses.value[index].height);
+                        
+                        // Update ray tracing
+                        traceRays();
+                    }
+                }
+
+                // Update surface
+                function updateSurface() {
+                    if (activeLens.value && activeLensIndex.value !== null) {
+                        const index = activeLensIndex.value;
+                        console.log('Updating surface:', activeLens.value.frontRoc, activeLens.value.backRoc);
+                        
+                        // Parse values to ensure they're numeric
+                        lenses.value[index].frontRoc = parseFloat(activeLens.value.frontRoc);
+                        lenses.value[index].backRoc = parseFloat(activeLens.value.backRoc);
+                        
+                        // Redraw lens
+                        drawLens(lenses.value[index], index);
+                        
+                        // Update formatted display value
+                        activeLens.value.frontRoc = format2Decimals(lenses.value[index].frontRoc);
+                        activeLens.value.backRoc = format2Decimals(lenses.value[index].backRoc);
+                        
+                        // Update ray tracing
+                        traceRays();
+                    }
+                }
+
+                // Update material
+                function updateMaterial() {
+                    if (activeLens.value && activeLensIndex.value !== null) {
+                        const index = activeLensIndex.value;
+                        console.log('Updating material:', activeLens.value.material);
+                        
+                        // Update lens material
+                        lenses.value[index].material = activeLens.value.material;
+                        
+                        // Update lens appearance based on material
+                        drawLens(lenses.value[index], index);
+                        
+                        // Update ray tracing
+                        traceRays();
+                    }
+                }
+
+                // Toggle ray visibility
+                function toggleRays() {
+                    showRays.value = !showRays.value;
+                    
+                    if (rayGroup.value) {
+                        rayGroup.value.visible(showRays.value);
+                        lensLayer.value.batchDraw();
+                    }
+                    
+                    if (showRays.value) {
+                        // Re-trace rays in case lens configuration changed
+                        traceRays();
+                    }
+                }
+
+                // Initialize canvas
+                function initCanvas() {
+                    if (!canvasContainer.value) return;
+
+                    // Create stage
+                    stage.value = new Konva.Stage({
+                        container: canvasContainer.value,
+                        width: window.innerWidth - 300,
+                        height: window.innerHeight
+                    });
+
+                    // Create layers
+                    gridLayer.value = new Konva.Layer();
+                    lensLayer.value = new Konva.Layer();
+
+                    // Add layers to stage
+                    stage.value.add(gridLayer.value);
+                    stage.value.add(lensLayer.value);
+
+                    // Make stage draggable
+                    stage.value.draggable(true);
+
+                    // Setup wheel event for zooming
+                    stage.value.on('wheel', handleWheel);
+                    
+                    // Create lens group
+                    createLensGroup();
+                    
+                    // Create ray group
+                    createRayGroup();
+                    
+                    // Create source group
+                    createSourceGroup();
+                    
+                    // Draw initial grid
+                    drawGrid();
+                    
+                    // Center view at (0,0)
+                    centerView();
+
+                    // Add default lens
+                    addLens();
+                    
+                    // Trace rays
+                    traceRays();
+                }
+
+                // Handle wheel event for zooming with debounce
+                let zoomTimeout = null;
+                function handleWheel(e) {
+                    e.evt.preventDefault();
+                    
+                    // Clear any pending zoom updates
+                    if (zoomTimeout) {
+                        clearTimeout(zoomTimeout);
+                    }
+                    
+                    const oldScale = stage.value.scaleX();
+                    const pointer = stage.value.getPointerPosition();
+                    
+                    const mousePointTo = {
+                        x: (pointer.x - stage.value.x()) / oldScale,
+                        y: (pointer.y - stage.value.y()) / oldScale
+                    };
+                    
+                    const direction = e.evt.deltaY > 0 ? 1 : -1;
+                    const scaleBy = 1.1;
+                    const newScale = direction > 0 ? oldScale / scaleBy : oldScale * scaleBy;
+                    
+                    stage.value.scale({ x: newScale, y: newScale });
+                    scale.value = newScale;
+                    
+                    const newPos = {
+                        x: pointer.x - mousePointTo.x * newScale,
+                        y: pointer.y - mousePointTo.y * newScale
+                    };
+                    
+                    stage.value.position(newPos);
+                    position.value = newPos;
+                    
+                    // Debounce the grid redraw
+                    zoomTimeout = setTimeout(() => {
+                        drawGrid();
+                        
+                        // Also update lens and source labels when zoom changes
+                        lenses.value.forEach((lens, index) => {
+                            drawLens(lens, index);
+                        });
+                        drawSource();
+                        
+                        zoomTimeout = null;
+                    }, 50); // 50ms delay
+                }
+
+                // Handle window resize
+                function handleResize() {
+                    if (stage.value) {
+                        stage.value.width(window.innerWidth - 300);
+                        stage.value.height(window.innerHeight);
+                        drawGrid();
+                    }
+                }
+
+                // Center view
+                function centerView() {
+                    if (!stage.value) return;
+                    
+                    const container = stage.value.container();
+                    const containerWidth = container.offsetWidth;
+                    const containerHeight = container.offsetHeight;
+                    
+                    const offsetX = (containerWidth + 300) / 2;
+                    const offsetY = containerHeight / 2;
+                    
+                    stage.value.position({
+                        x: offsetX,
+                        y: offsetY
+                    });
+                    position.value = { x: offsetX, y: offsetY };
+                    
+                    drawGrid();
+                }
+
+                // Reset zoom
+                function resetZoom() {
+                    if (!stage.value) return;
+                    
+                    stage.value.scale({ x: 1, y: 1 });
+                    scale.value = 1;
+                    centerView();
+                }
+
+                // Lifecycle hooks
+                onMounted(() => {
+                    initCanvas();
+                    window.addEventListener('resize', handleResize);
+                });
+
+                onUnmounted(() => {
+                    window.removeEventListener('resize', handleResize);
+                });
+
+                return {
+                    canvasContainer,
+                    centerView,
+                    resetZoom,
+                    addLens,
+                    deleteLens,
+                    lenses,
+                    activeLens,
+                    activeLensIndex,
+                    updatePosition,
+                    updateSize,
+                    updateSurface,
+                    updateMaterial,
+                    toggleRays,
+                    showRays,
+                    raySourceX,
+                    raySourceY,
+                    raySourceNumRays,
+                    raySourceHeight,
+                    updateRaySource,
+                    isSourceSelected
+                };
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html> 
